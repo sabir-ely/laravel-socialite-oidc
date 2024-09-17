@@ -37,7 +37,7 @@
   "conflict": {
     "jp-gauthier/socialiteproviders-oidc": "*"
   },
-  "minimum-stability": "dev",
+  "minimum-stability": "stable",
   "funding": [
     {
       "type": "github",

@@ -6,13 +6,13 @@ use Exception;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\RequestOptions;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use JsonException;
 use SocialiteProviders\Manager\OAuth2\AbstractProvider;
 use SocialiteProviders\Manager\OAuth2\User;
 
 /**
- * Class Provider.
+ * Generic OpenID Connect provider for Laravel Socialite
  *
  * @see https://docs.whmcs.com/OpenID_Connect_Developer_Guide
  */
@@ -89,26 +89,6 @@ class Provider extends AbstractProvider
     }
 
     /**
-     * Determine if the provider is operating with nonce.
-     *
-     * @return bool
-     */
-    protected function usesNonce(): bool
-    {
-        return $this->usesNonce;
-    }
-
-    /**
-     * Get the string used for nonce.
-     *
-     * @return string
-     */
-    protected function getNonce(): string
-    {
-        return Str::random(40);
-    }
-
-    /**
      * {@inheritdoc}
      */
     public function getScopes(): array
@@ -118,6 +98,25 @@ class Provider extends AbstractProvider
         }
 
         return $this->scopes;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function getTokenUrl()
+    {
+        return $this->getOpenIdConfig()['token_endpoint'];
+    }
+
+    /**
+     * Get the user_info URL for the provider.
+     *
+     * @return string
+     * @throws GuzzleException
+     */
+    protected function getUserInfoUrl()
+    {
+        return $this->getOpenIdConfig()['userinfo_endpoint'];
     }
 
     /**
@@ -148,17 +147,7 @@ class Provider extends AbstractProvider
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUrl,
             'scope' => $this->formatScopes($this->getScopes(), $this->scopeSeparator),
-
-            // Implicit flow response_type
-            // https://darutk.medium.com/diagrams-of-all-the-openid-connect-flows-6968e3990660
-            'response_type' => 'code id_token',
-
-            // Sends the token response as a form post instead of a fragment encoded redirect
-            'response_mode' => 'form_post',
-
-            // Always show login form
-            // https://auth0.com/docs/login/max-age-reauthentication
-            'prompt' => 'login',
+            'response_type' => 'code',
         ];
 
         if ($this->usesState()) {
@@ -177,6 +166,26 @@ class Provider extends AbstractProvider
         }
 
         return array_merge($fields, $this->parameters);
+    }
+
+    /**
+     * Determine if the provider is operating with nonce.
+     *
+     * @return bool
+     */
+    protected function usesNonce(): bool
+    {
+        return $this->usesNonce;
+    }
+
+    /**
+     * Get the string used for nonce.
+     *
+     * @return string
+     */
+    protected function getNonce(): string
+    {
+        return Str::random(40);
     }
 
     /**
@@ -208,7 +217,7 @@ class Provider extends AbstractProvider
                 $response = $this->getHttpClient()->get($configUrl);
 
                 $this->configurations = json_decode((string)$response->getBody(), true, 512, JSON_THROW_ON_ERROR);
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 throw new ConfigurationFetchingException('Unable to get the OIDC configuration from ' . $configUrl . ': ' . $e->getMessage());
             }
         }
@@ -230,9 +239,11 @@ class Provider extends AbstractProvider
             throw new InvalidStateException("Callback: invalid state.", 401);
         }
 
+        $tokenResponse = $this->getAccessTokenResponse($this->request->get('code'));
+
         // Decrypt JWT token
         $payload = $this->decodeJWT(
-            $this->request->get('id_token'),
+            $tokenResponse['id_token'],
             $this->request->get('code')
         );
 
@@ -242,35 +253,18 @@ class Provider extends AbstractProvider
 
         $this->user = $this->mapUserToObject((array)$payload);
 
-        /**
-         * Send the code to get an access_token
-         * Response contains : id_token, access_token, expires_in, token_type, scope
-         */
-        $response = $this->getAccessTokenResponse($this->getCode());
-        $token = Arr::get($response, 'access_token');
-        return $this->user->setToken($token)
-            ->setRefreshToken(Arr::get($response, 'refresh_token'))
-            ->setExpiresIn(Arr::get($response, 'expires_in'));
+        return $this->user->setToken($tokenResponse['access_token'])
+            ->setRefreshToken($tokenResponse['refresh_token'] ?? null)
+            ->setExpiresIn($tokenResponse['expires_in']);
     }
 
     protected function decodeJWT($jwt, $code)
     {
         try {
             [$jwt_header, $jwt_payload, $jwt_signature] = explode(".", $jwt);
-
-            // alg, kid, typ, x5t
-            $header = json_decode($this->base64url_decode($jwt_header));
-
-            // nbf, exp, iss, aud, nonce, iat, c_hash, sid, auth_time, amr
-            // sub (dossier), idp (crha-member)
-            // name, role (array), given_name, family_name, email
             $payload = json_decode($this->base64url_decode($jwt_payload));
         } catch (Exception $e) {
             throw new InvalidTokenException('JWT: Failed to parse.', 401);
-        }
-
-        if ($this->isInvalidCode($code, $header->alg, $payload->c_hash)) {
-            throw new InvalidCodeException('JWT: Failed to verify code vs c_hash.', 401);
         }
 
         if ($this->isInvalidNonce($payload->nonce)) {
@@ -283,40 +277,6 @@ class Provider extends AbstractProvider
     private function base64url_decode($data)
     {
         return base64_decode(str_pad(strtr($data, '-_', '+/'), strlen($data) % 4, '=', STR_PAD_RIGHT));
-    }
-
-    /**
-     * Determine if the code is valid
-     * c_hash must correspond to the encoded code
-     * Ref: https://auth0.com/docs/authorization/flows/call-api-hybrid-flow
-     * Ref: https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthResponse
-     * (3.3.2.10.  Authorization Code Validation)
-     *
-     * @return bool
-     */
-    protected function isInvalidCode($code, $alg, $c_hash)
-    {
-        // 1. Using the hash algorithm specified in the alg claim in the ID Token header, hash the octets of the ASCII representation of the code.
-        $bit = '256'; // 256/384/512
-        if ($alg !== 'none') {
-            $bit = substr($alg, 2, 3);
-        }
-        $code_ascii = Str::ascii($code);
-        $binary_mode = true;
-        $code_hashed = hash('sha' . $bit, $code_ascii, $binary_mode);
-
-        // 2. Base64url-encode the left-most half of the hash.
-        $len = strlen($code_hashed) / 2;
-        $left_part = substr($code_hashed, 0, $len);
-        $result = $this->base64url_encode($left_part);
-
-        // 3. Check that the result matches the c_hash value.
-        return $result !== $c_hash;
-    }
-
-    private function base64url_encode($data)
-    {
-        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
     }
 
     /**
@@ -336,10 +296,7 @@ class Provider extends AbstractProvider
 
     protected function hasEmptyEmail($payload)
     {
-        if (!isset($payload->email) || strlen($payload->email) == 0) {
-            return true;
-        }
-        return false;
+        return !isset($payload->email) || strlen($payload->email) == 0;
     }
 
     /**
@@ -353,6 +310,7 @@ class Provider extends AbstractProvider
 
                 'email' => $user['email'] ?? null,
                 'name' => $user['name'] ?? null,
+                'nickname' => $user['nickname'] ?? null,
                 'given_name' => $user['given_name'] ?? null,
                 'family_name' => $user['family_name'] ?? null,
 
@@ -365,6 +323,7 @@ class Provider extends AbstractProvider
 
     /**
      * {@inheritdoc}
+     * @throws JsonException|GuzzleException
      */
     public function getAccessTokenResponse($code)
     {
@@ -378,16 +337,9 @@ class Provider extends AbstractProvider
             ),
         ]);
 
-        return json_decode((string)$response->getBody(), true);
+        return json_decode((string)$response->getBody(), true, 512, JSON_THROW_ON_ERROR);
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    protected function getTokenUrl()
-    {
-        return $this->getOpenIdConfig()['token_endpoint'];
-    }
 
     /**
      * {@inheritdoc}
@@ -406,16 +358,5 @@ class Provider extends AbstractProvider
         );
 
         return json_decode((string)$response->getBody(), true);
-    }
-
-    /**
-     * Get the user_info URL for the provider.
-     *
-     * @return string
-     * @throws GuzzleException
-     */
-    protected function getUserInfoUrl()
-    {
-        return $this->getOpenIdConfig()['userinfo_endpoint'];
     }
 }
