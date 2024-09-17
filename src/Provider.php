@@ -203,7 +203,7 @@ class Provider extends AbstractProvider
     {
         if ($this->configurations === null) {
             try {
-                $configUrl = rtrim($this->getConfig('url'), '/') . '/.well-known/openid-configuration';
+                $configUrl = rtrim($this->getConfig('base_url'), '/') . '/.well-known/openid-configuration';
 
                 $response = $this->getHttpClient()->get($configUrl);
 
