@@ -1,28 +1,47 @@
 {
-    "name": "jp-gauthier/socialiteproviders-oidc",
-    "description": "OpenID Connect OAuth2 Provider for Laravel Socialite",
-    "keywords": [
-        "laravel",
-        "oauth",
-        "provider",
-        "socialite"
-    ],
-    "license": "MIT",
-    "authors": [
-        {
-            "name": "JPG Dev",
-            "homepage": "https://jpgdev.com"
-        }
-    ],
-    "require": {
-        "php": "^7.2 || ^8.0",
-        "ext-json": "*",
-        "socialiteproviders/manager": "~4.0"
+  "name": "kovah/laravel-socialite-oidc",
+  "description": "OpenID Connect OAuth2 Provider for Laravel Socialite",
+  "keywords": [
+    "laravel",
+    "oauth",
+    "provider",
+    "socialite",
+    "oidc"
+  ],
+  "homepage": "https://github.com/kovah/laravel-socialite-oidc",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "JPG Dev",
+      "homepage": "https://jpgdev.com"
     },
-    "autoload": {
-        "psr-4": {
-            "SocialiteProviders\\OIDC\\": ""
-        }
-    },
-    "minimum-stability": "dev"
+    {
+      "name": "Kevin Woblick",
+      "email": "mail@kovah.de",
+      "homepage": "https://kovah.de",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+    "php": "^8.1",
+    "ext-json": "*",
+    "socialiteproviders/manager": "^4.0",
+    "illuminate/http": "^9.0 | ^10.0 | ^11.0",
+    "illuminate/support": "^9.0 | ^10.0 | ^11.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "SocialiteProviders\\OIDC\\": "src"
+    }
+  },
+  "conflict": {
+    "jp-gauthier/socialiteproviders-oidc": "*"
+  },
+  "minimum-stability": "dev",
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/kovah"
+    }
+  ]
 }
