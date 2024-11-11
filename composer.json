@@ -1,5 +1,5 @@
 {
-  "name": "kovah/laravel-socialite-oidc",
+  "name": "sabir-ely/laravel-socialite-oidc",
   "description": "OpenID Connect OAuth2 Provider for Laravel Socialite",
   "keywords": [
     "laravel",
@@ -8,18 +8,12 @@
     "socialite",
     "oidc"
   ],
-  "homepage": "https://github.com/kovah/laravel-socialite-oidc",
+  "homepage": "https://github.com/sabir-ely/laravel-socialite-oidc",
   "license": "MIT",
   "authors": [
     {
-      "name": "JPG Dev",
-      "homepage": "https://jpgdev.com"
-    },
-    {
-      "name": "Kevin Woblick",
-      "email": "mail@kovah.de",
-      "homepage": "https://kovah.de",
-      "role": "Developer"
+      "name": "Sabir el Yahiaoui",
+      "homepage": "https://sabir.page"
     }
   ],
   "require": {

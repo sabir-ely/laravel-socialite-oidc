@@ -2,6 +2,10 @@
 
 ![Laravel Support: v9, v10, v11](https://img.shields.io/badge/Laravel%20Support-v9%2C%20v10%2C%20v11-blue) ![PHP Support: 8.1, 8.2, 8.3](https://img.shields.io/badge/PHP%20Support-8.1%2C%208.2%2C%208.3-blue)
 
+
+### **This is a fork of [xdubois/laravel-socialite-oidc](https://github.com/xdubois/laravel-socialite-oidc) and [kovah/laravel-socialite-oidc](https://github.com/kovah/laravel-socialite-oidc), all credit goes to them, I just needed to make some small tweaks.**
+
+
 ## Installation & Basic Usage
 
 Please see the [Base Installation Guide](https://socialiteproviders.com/usage/), then follow the provider specific instructions below.
