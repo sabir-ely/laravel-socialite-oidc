@@ -331,8 +331,16 @@ class Provider extends AbstractProvider
      */
     public function getAccessTokenResponse($code)
     {
+
+        $client_id = $this->getConfig('client_id');
+        $client_secret = $this->getConfig('client_secret');
+        $auth_header = 'Basic ' . base64_encode($client_id . ':' . $client_secret);
+
         $response = $this->getHttpClient()->post($this->getTokenUrl(), [
-            RequestOptions::HEADERS => ['Accept' => 'application/json'],
+            RequestOptions::HEADERS => [
+                'Accept' => 'application/json',
+                'Authorization' => $auth_header
+            ],
             RequestOptions::FORM_PARAMS => array_merge(
                 $this->getTokenFields($code),
                 [
